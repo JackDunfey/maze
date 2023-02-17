@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Maze Runner</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+            transform: translate(-50%, -50%);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id='maze'></canvas>
+    <button onclick="generateMaze()">Generate a maze</button>
+    <button disabled="disabled" id="solve_btn" onclick="solve()">Solve</button>
+    <!-- TODO: Make it stop @ exit -->
+    <script>
+        const DEBUG = false;
+
+        const rows = 40;
+        const size = 800;
+        const grid = new Array(rows).fill(0).map(() => new Array(rows).fill(0));
+        const canvas = document.getElementById('maze');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.height = size;
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            grid.forEach(row => row.forEach(cell => cell.draw()));
+        }
+        const drawLine = (x0, y0, x1, y1) => { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
+        class Cell {
+            // Add init function
+            constructor(y, x) {
+                this.y = y;
+                this.x = x;
+                this.visited = false;
+                this.onRoute = false;
+                this.onStack = false;
+                // Walls = [top,right,bottom,left]
+                this.connected = [false, false, false, false];
+            }
+            draw() {
+                let r = size / rows;
+                let x = this.x * r;
+                let y = this.y * r;
+                // Lines = [top,right,bottom,left]
+                let lines = [[x, y, x + r, y], [x + r, y, x + r, y + r], [x, y + r, x + r, y + r], [x, y, x, y + r]];
+                lines.filter((_, i) => !this.connected[i]).forEach(line => drawLine(...line));
+                if (this.onRoute) {
+                    ctx.fillStyle = "rgba(255,0,0,0.7)";
+                    ctx.fillRect(x, y, r, r);
+                }
+                if (DEBUG && this.visited) {
+                    drawLine(x, y, x + r, y + r);
+                    drawLine(x + r, y, x, y + r);
+                }
+                if(this.onStack) {
+                    ctx.fillStyle = "rgba(0,0,255,0.7)";
+                    ctx.fillRect(x, y, r, r);
+                }
+            }
+            connectWith(other) {
+                if (!(other instanceof Cell))
+                    throw new Error("other is not a Cell");
+                let dx = other.x - this.x;
+                let dy = other.y - this.y;
+                if (dx == 1) {
+                    this.connected[1] = true;
+                    other.connected[3] = true;
+                } else if (dx == -1) {
+                    this.connected[3] = true;
+                    other.connected[1] = true;
+                } else if (dy == 1) {
+                    this.connected[2] = true;
+                    other.connected[0] = true;
+                } else if (dy == -1) {
+                    this.connected[0] = true;
+                    other.connected[2] = true;
+                }
+            }
+            getNeighbors() {
+                let neighbors = [
+                    this.y > 0 ? grid[this.y - 1][this.x] : null,
+                    this.x < rows - 1 ? grid[this.y][this.x + 1] : null,
+                    this.y < rows - 1 ? grid[this.y + 1][this.x] : null,
+                    this.x > 0 ? grid[this.y][this.x - 1] : null
+                ];
+                return neighbors;
+            }
+            getConnectedNeighbors() {
+                return this.getNeighbors().filter(n=>this.connected[this.getNeighbors().indexOf(n)]);
+            }
+            getUnvisitedConnectedNeighbors() {
+                return this.getConnectedNeighbors().filter(n => !n.visited);
+            }
+            getUnvisitedNeighbors() {
+                return this.getNeighbors().filter(n => n && !n.visited);
+            }
+        }
+
+        function generateMaze() {
+            for (let y = 0; y < rows; y++)
+                for (let x = 0; x < rows; x++)
+                    grid[y][x] = new Cell(y, x);
+            let current = grid[0][0];
+            let stack = [current];
+            while (stack.length) {
+                current.visited = true;
+                if (current.getUnvisitedNeighbors().length) {
+                    next = current.getUnvisitedNeighbors()[Math.floor(Math.random() * current.getUnvisitedNeighbors().length)];
+                    current.connectWith(next);
+                    stack.push(current);
+                    current = next;
+                } else {
+                    current = stack.pop();
+                }
+            }
+            render();
+            document.getElementById("solve_btn").disabled = false;
+        }
+
+        function solve() {
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < rows; x++) {
+                    grid[y][x].visited = false;
+                }
+            }
+            let current = grid[0][0];
+            window.stack = [current];
+            while (current.x != rows - 1 || current.y != rows - 1) {
+                current.visited = true;
+                current.onRoute = true;
+                const neighbors = current.getUnvisitedConnectedNeighbors();
+                if (neighbors.length) {
+                    next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    stack.push(next);
+                    current = next;
+                } else {
+                    current = stack.pop();
+                    current.onRoute = false;
+                }
+            }
+            stack.forEach(cell=>cell.onStack=true);
+            render();
+        }
+    </script>
+</body>
+
+</html>
